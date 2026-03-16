@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # IDP Application
+  # ============================================
+  idp-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: idp-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/idp
+      - SPRING_DATASOURCE_USERNAME=idp
+      - SPRING_DATASOURCE_PASSWORD=idp
+      - DOCKER_HOST=tcp://docker-proxy:2375
+      - JWT_SECRET=${JWT_SECRET:-idp-secret-key-for-jwt-signing-must-be-at-least-256-bits-long-for-hs256}
+    depends_on:
+      - postgres
+      - docker-proxy
+    networks:
+      - idp-network
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.port=8080"
+      - "prometheus.path=/actuator/prometheus"
+
+  # ============================================
+  # Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: idp-postgres
+    environment:
+      - POSTGRES_DB=idp
+      - POSTGRES_USER=idp
+      - POSTGRES_PASSWORD=idp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - idp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Docker-in-Docker Proxy (for container management)
+  # ============================================
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: idp-docker-proxy
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - EXEC=1
+      - NETWORKS=1
+      - POST=1
+      - BUILD=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "2375:2375"
+    networks:
+      - idp-network
+
+  # ============================================
+  # Prometheus - Metrics Collection
+  # ============================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: idp-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=15d'
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - idp-network
+    restart: unless-stopped
+
+  # ============================================
+  # Grafana - Metrics & Logs Visualization
+  # ============================================
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: idp-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - idp-network
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  # ============================================
+  # Loki - Log Aggregation
+  # ============================================
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: idp-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - idp-network
+    restart: unless-stopped
+
+  # ============================================
+  # Promtail - Log Shipping
+  # ============================================
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: idp-promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - idp-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+networks:
+  idp-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:

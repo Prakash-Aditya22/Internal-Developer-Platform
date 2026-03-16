@@ -1,0 +1,62 @@
+groups:
+  - name: idp-alerts
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: rate(http_server_requests_seconds_count{status=~"5.."}[5m]) / rate(http_server_requests_seconds_count[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.instance }}"
+
+      # High latency alert
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is {{ $value }}s for {{ $labels.instance }}"
+
+      # Service down alert
+      - alert: ServiceDown
+        expr: up{job="idp-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IDP service is down"
+          description: "IDP application has been down for more than 1 minute"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High JVM heap memory usage"
+          description: "JVM heap usage is above 90% for {{ $labels.instance }}"
+
+      # Too many deployments failing
+      - alert: HighDeploymentFailureRate
+        expr: rate(idp_deployments_failure_total[1h]) / rate(idp_deployments_success_total[1h]) > 0.3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High deployment failure rate"
+          description: "More than 30% of deployments are failing"
+
+      # Docker build failures
+      - alert: DockerBuildFailures
+        expr: increase(idp_docker_builds_failure_total[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple Docker build failures"
+          description: "{{ $value }} Docker builds have failed in the last hour"
