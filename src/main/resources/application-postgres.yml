@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: ${IDP_DB_URL:jdbc:postgresql://localhost:5433/idp}
+    driver-class-name: org.postgresql.Driver
+    username: ${IDP_DB_USERNAME:idp}
+    password: ${IDP_DB_PASSWORD:idp}
+
+  h2:
+    console:
+      enabled: false
+
+  sql:
+    init:
+      mode: never
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    defer-datasource-initialization: false
+    hibernate:
+      ddl-auto: update

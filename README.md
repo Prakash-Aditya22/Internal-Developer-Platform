@@ -69,6 +69,23 @@ cd internal-developer-platform
 # Application will be available at http://localhost:8080
 ```
 
+### Development Mode (PostgreSQL)
+
+```bash
+# Start the persistent PostgreSQL database
+docker compose -f docker-compose.postgres.yml up -d
+
+# Run the backend against PostgreSQL
+./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres
+```
+
+On Windows PowerShell, use `.\mvnw.cmd` instead of `./mvnw`.
+
+The PostgreSQL development defaults are database `idp`, username `idp`, and
+password `idp`. Override them with `IDP_DB_URL`, `IDP_DB_USERNAME`, and
+`IDP_DB_PASSWORD`. The database is published on host port `5433` to avoid
+collisions with an existing local PostgreSQL installation.
+
 ### Full Stack with Observability
 
 ```bash

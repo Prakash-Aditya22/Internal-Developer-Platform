@@ -3,6 +3,7 @@ package com.idp.domain.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.envers.Audited;
+import org.hibernate.envers.RelationTargetAuditMode;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -55,6 +56,7 @@ public class User extends BaseEntity implements UserDetails {
 
   @ManyToMany(fetch = FetchType.EAGER)
   @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
+  @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
   @Builder.Default
   private Set<Role> roles = new HashSet<>();
 
